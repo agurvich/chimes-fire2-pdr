@@ -7,25 +7,22 @@ import ctypes as ct
 
 from abg_python.galaxy.gal_utils import Galaxy
 
-def main(savename='m09_res30',suite_name='metal_diffusion',mps=1,**kwargs):
+def main(savename='m09_res30',suite_name='metal_diffusion',mps=1,snapnum=None,**kwargs):
 
     ## directories for reading in from and outputting new files to
     output_dir = os.path.join(os.environ['HOME'],'scratch','data',suite_name,savename,'chimes')
     
     ## snapshots corresponding to the FIRE-2 public data release
-    snaps = [88]#[600, 277, 172, 120, 88][::-1]
+    if snapnum is None: snapnum = [600, 277, 172, 120, 88][0]
 
     if mps is None: mps = multiprocessing.cpu_count()
     
     print(f'using {mps} threads')
     time.sleep(3)
 
-    for snap in snaps: 
-        galaxy = Galaxy(savename,snap,suite_name=suite_name,loud=False,full_init=False,loud_metadata=False)
-        try: produce_chimes_output(snap,galaxy.snapdir,output_dir,mps=mps)
-        except Exception as e: 
-            print(f"{snap} failed: {repr(e)}")
-            raise
+    galaxy = Galaxy(savename,snapnum,suite_name=suite_name,loud=False,full_init=False,loud_metadata=False)
+    try: produce_chimes_output(snapnum,galaxy.snapdir,output_dir,mps=mps)
+    except Exception as e: print(f"{snapnum} failed: {repr(e)}"); raise
         
 def produce_chimes_output(
     snapnum,
@@ -123,11 +120,11 @@ if __name__ == '__main__':
     argv = sys.argv[1:]
     opts,args = getopt.getopt(
         argv,'',[
+        'snapnum=',
         'savename=',
         'suite_name=',
         'mps='])
     #options:
-    #--snap(low/high) : snapshot numbers to loop through
     #--savename : name of galaxy to use
     #--mps : mps flag, default = 0
     for i,opt in enumerate(opts):
