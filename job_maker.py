@@ -115,26 +115,28 @@ def produce_chimes_output(
             'chimes-driver')
 
     current_dir = os.getcwd()
-    try:
-        #os.chdir(chimes_driver_dir)
+    if not os.path.isfile(outputfile):
+        try:
+            #os.chdir(chimes_driver_dir)
 
-        ## determine what we're running
-        if mps <= 1: exec_str = f"python chimes-driver.py {param_file}"
-        else: exec_str = f"mpirun -npernode {mps} --bind-to-core python chimes-driver.py {param_file}"
+            ## determine what we're running
+            if mps <= 1: exec_str = f"python chimes-driver.py {param_file}"
+            else: exec_str = f"mpirun -npernode {mps} --bind-to-core python chimes-driver.py {param_file}"
 
-        jobfile = os.path.join(current_dir,'submission_scripts')
-        name = os.path.basename(os.path.dirname(snapdir))
-        if not os.path.isdir(jobfile): os.makedirs(jobfile)
-        jobfile = os.path.join(jobfile,f'{name}_{snapnum}.sh')
-        with open('preamble.sh','r') as rhandle:
-            with open(jobfile,'w') as whandle:
-                whandle.write(rhandle.read())
-                whandle.write(f"#SBATCH -J {name}_{snapnum}_chimes\n")
-                whandle.write(f"cd {chimes_driver_dir}\n")
-                whandle.write(exec_str+"\n")
-        #os.system(exec_str)
+            jobfile = os.path.join(current_dir,'submission_scripts')
+            name = os.path.basename(os.path.dirname(snapdir))
+            if not os.path.isdir(jobfile): os.makedirs(jobfile)
+            jobfile = os.path.join(jobfile,f'{name}_{snapnum:03d}.sh')
+            with open('preamble.sh','r') as rhandle:
+                with open(jobfile,'w') as whandle:
+                    whandle.write(rhandle.read())
+                    whandle.write(f"#SBATCH -J {name}_{snapnum}_chimes\n")
+                    whandle.write(f"cd {chimes_driver_dir}\n")
+                    whandle.write(exec_str+"\n")
+            #os.system(exec_str)
 
-    except: raise
+        except: raise
+    else: print(outputfile,'exists. will not generate a submission script')
     #finally: os.chdir(current_dir)
 
 
