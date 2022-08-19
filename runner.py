@@ -7,22 +7,68 @@ import ctypes as ct
 
 from abg_python.galaxy.gal_utils import Galaxy
 
-def main(savename='m09_res30',suite_name='metal_diffusion',mps=1,snapnum=None,**kwargs):
+def main(suite_name='FIRE2_pdr'):
 
-    ## directories for reading in from and outputting new files to
-    output_dir = os.path.join(os.environ['HOME'],'scratch','data',suite_name,savename,'chimes')
-    
-    ## snapshots corresponding to the FIRE-2 public data release
-    if snapnum is None: snapnum = [600, 277, 172, 120, 88][0]
+    sim_dir = os.path.join(os.environ['HOME'],'ciera','snaps',suite_name)
 
-    if mps is None: mps = multiprocessing.cpu_count()
+    names=[
+        'm09_res30',
+        'm10q_res30',
+        'm10v_res30',
+        'm11b_res2100',
+        'm11d_res7100',
+        'm11e_res7100',
+        'm11h_res7100',
+        'm11i_res7100',
+        'm11q_res880',
+        'm12m_res7100',
+        'm12z_res4200',
+        'm12b_res7100',
+        'm12c_res7100',
+        'm12f_res7100',
+        'm12i_res7100',
+        'm12r_res7100',
+        'm12w_res7100',
+        'm12_elvis_RomulusRemus_res4000',
+        'm12_elvis_RomeoJuliet_res3500',
+        'm12_elvis_ThelmaLouise_res4000']
+
+    names = os.listdir(sim_dir)
+    #snapnums=[600,277,172,120,88]
+    snapnums = None
+
+    mps = multiprocessing.cpu_count()
     
     print(f'using {mps} threads')
     time.sleep(3)
+    
+    for savename in names:
+        ## directories for reading in from and outputting new files to
+        snapdir = os.path.join(sim_dir,savename,'output')
+        datadir = os.path.join(os.environ['HOME'],'ciera','data',suite_name,savename,'chimes')
 
-    galaxy = Galaxy(savename,snapnum,suite_name=suite_name,loud=False,full_init=False,loud_metadata=False)
-    try: produce_chimes_output(snapnum,galaxy.snapdir,output_dir,mps=mps)
-    except Exception as e: print(f"{snapnum} failed: {repr(e)}"); raise
+        ## which snapshots to run on
+        if snapnums is None:
+            snapnums = sorted([int(fname.split('_')[1].split('.hdf5')[0]) for fname in os.listdir(snapdir)])
+
+        for snapnum in snapnums:
+            galaxy = Galaxy(
+                savename,
+                snapnum,
+                suite_name=suite_name,
+                snapdir=snapdir,
+                datadir=datadir,
+                loud=False,
+                full_init=False,
+                loud_metadata=False)
+
+            try: 
+                produce_chimes_output(
+                    snapnum,
+                    galaxy.snapdir,
+                    galaxy.datadir,
+                    mps=mps)
+            except Exception as e: print(f"{snapnum} failed: {repr(e)}"); raise
         
 def produce_chimes_output(
     snapnum,
@@ -50,7 +96,12 @@ def produce_chimes_output(
     ## attempt to import chimes, get an error before we do anything heavy
     try:
         chimesLib = ct.cdll.LoadLibrary(
-            os.path.join(os.environ['WORK'],'CHIMES-repos','chimes','libchimes.so'))
+            os.path.join(
+                os.environ['HOME'],
+                'projects',
+                'chimes_dirs',
+                'chimes',
+                'libchimes.so'))
     except:
         print("failed to import chimes, make sure it's built")
         raise
@@ -58,22 +109,33 @@ def produce_chimes_output(
     ## change directories to the chimes driver location
     if chimes_driver_dir is None: 
         chimes_driver_dir = os.path.join(
-        os.environ['WORK'],
-        'CHIMES-repos',
-        'chimes-driver')
+            os.environ['HOME'],
+            'projects',
+            'chimes_dirs',
+            'chimes-driver')
 
     current_dir = os.getcwd()
     try:
-        os.chdir(chimes_driver_dir)
+        #os.chdir(chimes_driver_dir)
 
         ## determine what we're running
         if mps <= 1: exec_str = f"python chimes-driver.py {param_file}"
-        else: exec_str = f"mpirun -np {mps} python chimes-driver.py {param_file}"
+        else: exec_str = f"mpirun -npernode {mps} --bind-to-core python chimes-driver.py {param_file}"
 
-        os.system(exec_str)
+        jobfile = os.path.join(current_dir,'jobs')
+        name = os.path.basename(os.path.dirname(snapdir))
+        if not os.path.isdir(jobfile): os.makedirs(jobfile)
+        jobfile = os.path.join(jobfile,f'{name}_{snapnum}.sh')
+        with open('preamble.sh','r') as rhandle:
+            with open(jobfile,'w') as whandle:
+                whandle.write(rhandle.read())
+                whandle.write(f"#SBATCH -J {name}_{snapnum}_chimes\n")
+                whandle.write(f"cd {chimes_driver_dir}\n")
+                whandle.write(exec_str+"\n")
+        #os.system(exec_str)
 
     except: raise
-    finally: os.chdir(current_dir)
+    #finally: os.chdir(current_dir)
 
 
 def locate_snapshot_files(snapdir,snap):
@@ -100,11 +162,20 @@ def create_param_file(input_file,output_file):
     ##    chimes_library_path        <CHIMES_DIR>/libchimes.so 
     template = template.replace(
         "<CHIMES_DIR>",
-        os.path.join(os.environ['WORK'],'CHIMES-repos','chimes'))
+        os.path.join(
+            os.environ['HOME'],
+            'projects',
+            'chimes_dirs',
+            'chimes'))
+
     ##    chimes_data_path           <CHIMES_DATA_DIR>
     template = template.replace(
         "<CHIMES_DATA_DIR>",
-        os.path.join(os.environ['WORK'],'CHIMES-repos','chimes-data'))
+        os.path.join(
+            os.environ['HOME'],
+            'projects',
+            'chimes_dirs',
+            'chimes-data'))
     ##    input_file 	     	   <INPUT_FILE> 
     template = template.replace("<INPUT_FILE>",input_file)
     ##    output_file                <OUTPUT_FILE>
