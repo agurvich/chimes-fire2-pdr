@@ -122,7 +122,7 @@ def produce_chimes_output(
         if mps <= 1: exec_str = f"python chimes-driver.py {param_file}"
         else: exec_str = f"mpirun -npernode {mps} --bind-to-core python chimes-driver.py {param_file}"
 
-        jobfile = os.path.join(current_dir,'jobs')
+        jobfile = os.path.join(current_dir,'submission_scripts')
         name = os.path.basename(os.path.dirname(snapdir))
         if not os.path.isdir(jobfile): os.makedirs(jobfile)
         jobfile = os.path.join(jobfile,f'{name}_{snapnum}.sh')
