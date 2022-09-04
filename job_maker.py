@@ -6,7 +6,9 @@ import time
 import ctypes as ct
 
 from abg_python.galaxy.gal_utils import Galaxy
+from abg_python.function_utils import CLI_args
 
+@CLI_args()
 def main(suite_name='FIRE2_pdr'):
 
     sim_dir = os.path.join(os.environ['HOME'],'ciera','snaps',suite_name)
@@ -37,7 +39,7 @@ def main(suite_name='FIRE2_pdr'):
     #snapnums=[600,277,172,120,88]
     snapnums = None
 
-    mps = multiprocessing.cpu_count()
+    mps = 52#multiprocessing.cpu_count()
     
     print(f'using {mps} threads')
     time.sleep(3)
@@ -115,13 +117,13 @@ def produce_chimes_output(
             'chimes-driver')
 
     current_dir = os.getcwd()
-    if not os.path.isfile(outputfile):
+    if not os.path.isfile(output_file):
         try:
             #os.chdir(chimes_driver_dir)
 
             ## determine what we're running
             if mps <= 1: exec_str = f"python chimes-driver.py {param_file}"
-            else: exec_str = f"mpirun -npernode {mps} --bind-to-core python chimes-driver.py {param_file}"
+            else: exec_str = f"mpirun --npernode {mps} --report-bindings python chimes-driver.py {param_file}"
 
             jobfile = os.path.join(current_dir,'submission_scripts')
             name = os.path.basename(os.path.dirname(snapdir))
@@ -131,12 +133,14 @@ def produce_chimes_output(
                 with open(jobfile,'w') as whandle:
                     whandle.write(rhandle.read())
                     whandle.write(f"#SBATCH -J {name}_{snapnum}_chimes\n")
+                    whandle.write(f"#SBATCH -o out_{name}_{snapnum}_%j.out\n")       # output and error file name (%j expands to jobID)
+                    whandle.write(f"module load mpi/openmpi-4.1.1-gcc.10.2.0\n")
                     whandle.write(f"cd {chimes_driver_dir}\n")
                     whandle.write(exec_str+"\n")
             #os.system(exec_str)
 
         except: raise
-    else: print(outputfile,'exists. will not generate a submission script')
+    else: print(output_file,'exists. will not generate a submission script')
     #finally: os.chdir(current_dir)
 
 
@@ -190,24 +194,4 @@ def create_param_file(input_file,output_file):
     return param_file
 
 if __name__ == '__main__':
-    argv = sys.argv[1:]
-    opts,args = getopt.getopt(
-        argv,'',[
-        'snapnum=',
-        'savename=',
-        'suite_name=',
-        'mps='])
-    #options:
-    #--savename : name of galaxy to use
-    #--mps : mps flag, default = 0
-    for i,opt in enumerate(opts):
-        if opt[1]=='':
-            opts[i]=('mode',opt[0].replace('-',''))
-        else:
-            try:
-                ## if it's an int or a float this should work
-                opts[i]=(opt[0].replace('-',''),eval(opt[1]))
-            except:
-                ## if it's a string... not so much
-                opts[i]=(opt[0].replace('-',''),opt[1])
-    main(**dict(opts))
+    main()
